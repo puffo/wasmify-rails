@@ -214,15 +214,17 @@ module ActiveRecord
           raise NotImplementedError, "sqlite3_wasm prepared statements are not implemented yet"
         else
           stmt = raw_connection.prepare(sql)
+          # Get affected_rows before building result - needed for DELETE/UPDATE operations
+          # Rails 8.1+ requires this for destroy callbacks to work correctly
+          @last_affected_rows = raw_connection.changes
           result =
             if stmt.column_count.zero?
-              ActiveRecord::Result.empty
+              ActiveRecord::Result.empty(affected_rows: @last_affected_rows)
             else
-              ActiveRecord::Result.new(stmt.columns, stmt.to_a)
+              ActiveRecord::Result.new(stmt.columns, stmt.to_a, affected_rows: @last_affected_rows)
             end
         end
 
-        @last_affected_rows = raw_connection.changes
         verified!
 
         notification_payload[:row_count] = result&.length || 0
